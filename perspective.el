@@ -31,6 +31,33 @@
 
 ;;; Code:
 
+(defgroup perspective-mode 'nil
+  "Customization for Perspective mode")
+
+(defcustom persp-initial-frame-name "main"
+  "Name used for the initial perspective when enabling `persp-mode'."
+  :type 'string
+  :group 'perspective-mode)
+  
+(defcustom persp-show-modestring t
+  "Determines if `persp-modestring' is shown in the modeline.
+If the value is 'header, `persp-modestring' is shown in the
+header line instead."
+  :group 'perspective-mode
+  :type '(choice (const :tag "Off" nil)
+                 (const :tag "Modeline" t)
+                 (const :tag "Header" 'header)))
+
+(defcustom persp-modestring-dividers '("[" "]" "|")
+  "Plist of strings used to created `persp-modestring'.
+First string is the start of the modestring, second is the
+closing of the mode string, and the last is the divider between
+perspectives."
+  :group 'perspective-mode
+  :type '(list (string :tag "Open")
+               (string :tag "Close")
+               (string :tag "Divider")))
+               
 ;; This is only available in Emacs >23,
 ;; so we redefine it here for compatibility.
 (unless (fboundp 'with-selected-frame)
@@ -180,11 +207,6 @@ perspective-local values."))
  (defvar persp-modestring nil
    "The string displayed in the modeline representing the perspectives."))
 (put 'persp-modestring 'risky-local-variable t)
-
-(defvar persp-show-modestring t
-  "Determines if `persp-modestring' is shown in the modeline.
-If the value is 'header, `persp-modestring' is shown in the
-header line instead.")
 
 (defvar persp-protected nil
   "Whether a perspective error should cause persp-mode to be disabled.
@@ -352,10 +374,14 @@ jj  (persp-switch (format "%s" (car (posn-string (event-start event))))))
   "Update `persp-modestring' to reflect the current perspectives.
 Has no effect when `persp-show-modestring' is nil."
   (when persp-show-modestring
-    (setq persp-modestring
-          (append '("[")
-                  (persp-intersperse (mapcar 'persp-format-name (persp-names)) "|")
-                  '("]")))))
+    (let ((open (list (nth 0 persp-modestring-dividers)))
+          (close (list (nth 1 persp-modestring-dividers)))
+          (sep (nth 2 persp-modestring-dividers)))
+     (setq persp-modestring
+           (append open
+                   (persp-intersperse (mapcar 'persp-format-name
+                                              (persp-names)) sep)
+                   close)))))
 
 (defun persp-format-name (name)
   "Format the perspective name given by NAME for display in `persp-modestring'."
@@ -458,12 +484,12 @@ If none of these perspectives can be found, this function will
 create a new main perspective and return \"main\"."
   (cond
    (persp-last (persp-name persp-last))
-   ((gethash "main" perspectives-hash) "main")
+   ((gethash persp-initial-frame-name perspectives-hash) persp-initial-frame-name)
    ((> (hash-table-count perspectives-hash) 0) (car (persp-names)))
    (t (persp-activate
-       (make-persp :name "main" :buffers (buffer-list)
+       (make-persp :name persp-initial-frame-name :buffers (buffer-list)
          :window-configuration (current-window-configuration)))
-      "main")))
+      persp-initial-frame-name)))
 
 (defun persp-add-buffer (buffer)
   "Associate BUFFER with the current perspective.
@@ -717,7 +743,7 @@ By default, this uses the current frame."
       (persp-update-modestring))
 
     (persp-activate
-     (make-persp :name "main" :buffers (list (current-buffer))
+     (make-persp :name persp-initial-frame-name :buffers (list (current-buffer))
        :window-configuration (current-window-configuration)))))
 
 (defun persp-make-variable-persp-local (variable)
