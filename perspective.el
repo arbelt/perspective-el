@@ -113,8 +113,13 @@ Run with the activated perspective active.")
 (defvar persp-mode-map (make-sparse-keymap)
   "Keymap for perspective-mode.")
 
-(defvar persp-mode-prefix-key (kbd "C-x x")
-  "Prefix key for perspective")
+(defgroup persp nil
+  "Customizations for `perspective` package")
+
+(defcustom persp-mode-prefix-key (kbd "C-x x")
+  "Prefix key for perspective"
+  :group 'persp
+  :type 'key-sequence)
 
 (define-prefix-command 'perspective-map)
 
