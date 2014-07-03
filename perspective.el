@@ -6,7 +6,7 @@
 
 ;; Author: Nathan Weizenbaum
 ;; URL: http://github.com/nex3/perspective-el
-;; Version: 1.9
+;; Version: 1.10
 ;; Created: 2008-03-05
 ;; By: Nathan Weizenbaum
 ;; Keywords: workspace, convenience, frames
@@ -27,7 +27,6 @@
 ;; available by default.
 
 (require 'cl)
-(require 'anaphora)
 
 ;;; Code:
 
@@ -38,7 +37,7 @@
   "Name used for the initial perspective when enabling `persp-mode'."
   :type 'string
   :group 'perspective-mode)
-  
+
 (defcustom persp-show-modestring t
   "Determines if `persp-modestring' is shown in the modeline.
 If the value is 'header, `persp-modestring' is shown in the
@@ -57,7 +56,7 @@ perspectives."
   :type '(list (string :tag "Open")
                (string :tag "Close")
                (string :tag "Divider")))
-               
+
 ;; This is only available in Emacs >23,
 ;; so we redefine it here for compatibility.
 (unless (fboundp 'with-selected-frame)
@@ -140,25 +139,20 @@ Run with the activated perspective active.")
 (defvar persp-mode-map (make-sparse-keymap)
   "Keymap for perspective-mode.")
 
-(defcustom persp-mode-prefix-key (kbd "C-x x")
-  "Prefix key for perspective"
-  :group 'perspective-mode
-  :type 'key-sequence)
-
-(define-prefix-command 'perspective-map)
-
-(define-key perspective-map (kbd "s") 'persp-switch)
-(define-key perspective-map (kbd "k") 'persp-remove-buffer)
-(define-key perspective-map (kbd "c") 'persp-kill)
-(define-key perspective-map (kbd "r") 'persp-rename)
-(define-key perspective-map (kbd "a") 'persp-add-buffer)
-(define-key perspective-map (kbd "i") 'persp-import)
-(define-key perspective-map (kbd "n") 'persp-next)
-(define-key perspective-map (kbd "<right>") 'persp-next)
-(define-key perspective-map (kbd "p") 'persp-prev)
-(define-key perspective-map (kbd "<left>") 'persp-prev)
-
+(define-prefix-command 'perspective 'perspective-map)
 (define-key persp-mode-map (kbd "C-x x") perspective-map)
+
+(define-key persp-mode-map (kbd "C-x x s") 'persp-switch)
+(define-key persp-mode-map (kbd "C-x x k") 'persp-remove-buffer)
+(define-key persp-mode-map (kbd "C-x x c") 'persp-kill)
+(define-key persp-mode-map (kbd "C-x x r") 'persp-rename)
+(define-key persp-mode-map (kbd "C-x x a") 'persp-add-buffer)
+(define-key persp-mode-map (kbd "C-x x A") 'persp-set-buffer)
+(define-key persp-mode-map (kbd "C-x x i") 'persp-import)
+(define-key persp-mode-map (kbd "C-x x n") 'persp-next)
+(define-key persp-mode-map (kbd "C-x x <right>") 'persp-next)
+(define-key persp-mode-map (kbd "C-x x p") 'persp-prev)
+(define-key persp-mode-map (kbd "C-x x <left>") 'persp-prev)
 
 ;; make-variable-frame-local is obsolete according to the docs,
 ;; but I don't want to have to manually munge frame-parameters
@@ -365,7 +359,7 @@ For example, (persp-intersperse '(1 2 3) 'a) gives '(1 a 2 a 3)."
   "Select the clicked perspective.
 EVENT is the click event triggering this function call."
   (interactive "e")
-jj  (persp-switch (format "%s" (car (posn-string (event-start event))))))
+  (persp-switch (format "%s" (car (posn-string (event-start event))))))
 
 (defun persp-update-modestring ()
   "Update `persp-modestring' to reflect the current perspectives.
@@ -499,6 +493,20 @@ See also `persp-switch' and `persp-remove-buffer'."
   (let ((buffer (get-buffer buffer)))
     (unless (memq buffer (persp-buffers persp-curr))
       (push buffer (persp-buffers persp-curr)))))
+
+(defun persp-set-buffer (buffer-name)
+  "Associate BUFFER-NAME with the current perspective and remove it from any other."
+  (interactive
+   (list
+    (let ((read-buffer-function nil))
+      (read-buffer "Set buffer to perspective: "))))
+  (cond ((get-buffer buffer-name)
+         (persp-add-buffer buffer-name)
+         (loop for other-persp = (persp-buffer-in-other-p (get-buffer buffer-name))
+               while other-persp
+               do (with-perspective (cdr other-persp)
+                    (persp-remove-buffer buffer-name))))
+        (t (message "buffer %s doesn't exist" buffer-name))))
 
 (defun* persp-buffer-in-other-p (buffer)
   "Returns nil if BUFFER is only in the current perspective.
@@ -673,21 +681,6 @@ See also `persp-add-buffer'."
   (persp-protect
     (if persp-recursive (persp-switch (persp-name persp-recursive)))))
 
-(defun persp-unset-prefix-key ()
-  "Restore the original definition of `persp-mode-prefix-key'."
-  (awhen (get 'persp-mode-prefix-key :original)
-         (destructuring-bind (key . def) it
-           (when (eq perspective-map (lookup-key global-map key))
-             (global-set-key key def))
-           (put 'persp-mode-prefix-key :original nil))))
-
-(defun persp-set-prefix-key ()
-  "Define `persp-mode-prefix-key' as `perspective-map' in `global-map'."
-  (persp-unset-prefix-key)
-  (let ((key persp-mode-prefix-key))
-    (put 'wg-prefix-key :original (cons key (lookup-key global-map key)))
-    (global-set-key key perspective-map)))
-
 ;;;###autoload
 (define-minor-mode persp-mode
   "Toggle perspective mode.
@@ -706,7 +699,6 @@ named collections of buffers and window configurations."
         (setq read-buffer-function 'persp-read-buffer)
         (mapcar 'persp-init-frame (frame-list))
         (setf (persp-buffers persp-curr) (buffer-list))
-        (persp-set-prefix-key)
 
         (run-hooks 'persp-mode-hook))
     (ad-deactivate-regexp "^persp-.*")
@@ -714,8 +706,7 @@ named collections of buffers and window configurations."
     (remove-hook 'ido-make-buffer-list-hook 'persp-set-ido-buffers)
     (setq read-buffer-function nil)
     (setq perspectives-hash nil)
-    (setq global-mode-string (delq 'persp-modestring global-mode-string))
-    (persp-unset-prefix-key)))
+    (setq global-mode-string (delq 'persp-modestring global-mode-string))))
 
 (defun persp-init-frame (frame)
   "Initialize the perspectives system in FRAME.
